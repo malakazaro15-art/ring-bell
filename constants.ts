@@ -1,5 +1,5 @@
 
-import { BellSchedule, HolidayRange, SpecificHoliday } from './types';
+import { BellSchedule, HolidayRange, SpecificHoliday } from './types.ts';
 
 export const BELL_SCHEDULE: BellSchedule[] = [
   { hour: 8, minute: 30, label: "Entrada" },
@@ -19,7 +19,7 @@ export const HOLIDAY_RANGES: HolidayRange[] = [
 ];
 
 export const SPECIFIC_HOLIDAYS: SpecificHoliday[] = [
-  { day: 12, month: 9, year: 2025, name: "Hispanidad" }, // Octubre is index 9
+  { day: 12, month: 9, year: 2025, name: "Hispanidad" },
   { day: 13, month: 9, year: 2025, name: "Puente" },
   { day: 31, month: 9, year: 2025, name: "Puente" },
   { day: 1, month: 10, year: 2025, name: "Todos los Santos" },

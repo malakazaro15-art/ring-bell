@@ -1,8 +1,7 @@
 
-import { HOLIDAY_RANGES, SPECIFIC_HOLIDAYS } from '../constants';
+import { HOLIDAY_RANGES, SPECIFIC_HOLIDAYS } from '../constants.ts';
 
 export const isDateInRange = (now: Date, start: Date, end: Date): boolean => {
-  // Normalize to start and end of day
   const s = new Date(start); s.setHours(0,0,0,0);
   const e = new Date(end); e.setHours(23,59,59,999);
   return now >= s && now <= e;
@@ -14,15 +13,12 @@ export const isNonSchoolDay = (now: Date): boolean => {
   const m = now.getMonth();
   const a = now.getFullYear();
 
-  // Fin de semana (0=Domingo, 6=Sábado)
   if (dayOfWeek === 0 || dayOfWeek === 6) return true;
 
-  // Rangos de vacaciones
   for (const range of HOLIDAY_RANGES) {
     if (isDateInRange(now, range.start, range.end)) return true;
   }
 
-  // Festivos específicos
   for (const holiday of SPECIFIC_HOLIDAYS) {
     if (d === holiday.day && m === holiday.month && a === holiday.year) return true;
   }
