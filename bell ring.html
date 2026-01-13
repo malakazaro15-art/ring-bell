@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timbre Escolar - Secundaria</title>
+    <!-- Tailwind para el diseño -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Fuentes para el LCD -->
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- React y Babel para que funcione en GitHub sin compilación previa -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Iconos Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        .lcd-font { font-family: 'VT323', monospace; }
+        .lcd-screen {
+            background-color: #94ad1a;
+            color: #1a1a1a;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+            text-shadow: 1px 1px 0px rgba(255,255,255,0.1);
+        }
+        @keyframes ring {
+            0% { transform: rotate(0); }
+            10% { transform: rotate(10deg); }
+            20% { transform: rotate(-10deg); }
+            30% { transform: rotate(10deg); }
+            40% { transform: rotate(-10deg); }
+            50% { transform: rotate(0); }
+            100% { transform: rotate(0); }
+        }
+        .bell-animation { animation: ring 0.5s infinite; }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- CONFIGURACIÓN ---
+        const BELL_SCHEDULE = [
+            { hour: 8, minute: 30, label: "Entrada" },
+            { hour: 9, minute: 20, label: "Cambio Clase" },
+            { hour: 10, minute: 15, label: "Cambio Clase" },
+            { hour: 11, minute: 10, label: "Recreo Inicio" },
+            { hour: 11, minute: 40, label: "Recreo Fin" },
+            { hour: 12, minute: 30, label: "Cambio Clase" },
+            { hour: 13, minute: 25, label: "Cambio Clase" },
+            { hour: 14, minute: 20, label: "Salida" }
+        ];
+
+        const DURACION_TIMBRE_MS = 5000;
+
+        // --- LOGICA DE FESTIVOS ---
+        const isNonSchoolDay = (date) => {
+            const day = date.getDay(); // 0 = Domingo, 6 = Sábado
+            if (day === 0 || day === 6) return true;
+            
+            const d = date.getDate();
+            const m = date.getMonth(); // 0 = Enero
+            const a = date.getFullYear();
+
+            // Ejemplo: Navidad 2025
+            if (a === 2025 && m === 11 && d >= 20) return true;
+            if (a === 2026 && m === 0 && d <= 7) return true;
+
+            return false;
+        };
+
+        // --- COMPONENTE LCD ---
+        const LCDSimulator = ({ line1, line2 }) => (
+            <div className="bg-slate-800 p-6 rounded-xl border-4 border-slate-700 shadow-2xl inline-block">
+                <div className="lcd-screen p-4 rounded-md lcd-font text-4xl tracking-widest leading-none select-none min-w-[280px]">
+                    <div className="whitespace-pre uppercase">{line1.padEnd(16, ' ')}</div>
+                    <div className="whitespace-pre uppercase">{line2.padEnd(16, ' ')}</div>
+                </div>
+                <div className="flex justify-between mt-4">
+                    <div className="w-4 h-4 rounded-full bg-slate-600"></div>
+                    <div className="text-[10px] text-slate-500 font-mono">I2C: 0x27 | 16x2</div>
+                    <div className="w-4 h-4 rounded-full bg-slate-600"></div>
+                </div>
+            </div>
+        );
+
+        // --- APLICACIÓN PRINCIPAL ---
+        const App = () => {
+            const [now, setNow] = useState(new Date());
+            const [isRinging, setIsRinging] = useState(false);
+            const audioCtx = useRef(null);
+
+            // Sonido tipo Buzzer Arduino
+            const playBuzzer = () => {
+                if (!audioCtx.current) audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+                
+                const oscillator = audioCtx.current.createOscillator();
+                const gain = audioCtx.current.createGain();
+
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(800, audioCtx.current.currentTime);
+                
+                gain.gain.setValueAtTime(0.1, audioCtx.current.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.current.currentTime + 5);
+
+                oscillator.connect(gain);
+                gain.connect(audioCtx.current.destination);
+
+                oscillator.start();
+                oscillator.stop(audioCtx.current.currentTime + 5);
+            };
+
+            const triggerBell = () => {
+                if (isRinging) return;
+                setIsRinging(true);
+                playBuzzer();
+                setTimeout(() => setIsRinging(false), DURACION_TIMBRE_MS);
+            };
+
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    const d = new Date();
+                    setNow(d);
+
+                    // Verificación automática
+                    if (!isNonSchoolDay(d)) {
+                        const h = d.getHours();
+                        const m = d.getMinutes();
+                        const s = d.getSeconds();
+
+                        const match = BELL_SCHEDULE.find(t => t.hour === h && t.minute === m && s === 0);
+                        if (match && !isRinging) triggerBell();
+                    }
+                }, 1000);
+                return () => clearInterval(interval);
+            }, [isRinging]);
+
+            const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            const isLectivo = !isNonSchoolDay(now);
+
+            return (
+                <div className="max-w-4xl mx-auto px-4 py-10">
+                    <header className="flex flex-col md:flex-row items-center justify-between mb-10 gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-2xl bg-blue-600 text-white shadow-lg ${isRinging ? 'bell-animation' : ''}`}>
+                                <i data-lucide="bell"></i>
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-slate-800">Timbre Secundaria</h1>
+                                <p className="text-slate-500 text-sm">Sistema Arduino DS3231</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={triggerBell}
+                            disabled={isRinging}
+                            className={`px-8 py-4 rounded-2xl font-bold transition-all shadow-xl flex items-center gap-3 ${
+                                isRinging ? 'bg-red-500 text-white scale-105' : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'
+                            }`}
+                        >
+                            <i data-lucide={isRinging ? "square" : "play"}></i>
+                            {isRinging ? 'TIMBRE SONANDO' : 'ACTIVAR MANUAL'}
+                        </button>
+                    </header>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 space-y-8">
+                            <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200 text-center relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
+                                <h2 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-8">LiquidCrystal I2C 16x2 Monitor</h2>
+                                <LCDSimulator 
+                                    line1={`HORA ${timeStr}`} 
+                                    line2={isLectivo ? "LECTIVO       " : "NO LECTIVO    "} 
+                                />
+                                <div className="mt-10 flex justify-center gap-8 text-xs font-bold text-slate-500 uppercase tracking-widest">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2.5 h-2.5 rounded-full ${isLectivo ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-rose-500'}`}></div>
+                                        <span>Status: {isLectivo ? 'Ok' : 'Standby'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2.5 h-2.5 rounded-full ${isRinging ? 'bg-amber-500 animate-ping' : 'bg-slate-200'}`}></div>
+                                        <span>Relé Pin 8: {isRinging ? 'High' : 'Low'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
+                                <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                                    <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                                        <i data-lucide="clock" className="w-4 h-4"></i> Programación Actual
+                                    </h3>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <tbody className="divide-y divide-slate-100">
+                                            {BELL_SCHEDULE.map((item, idx) => (
+                                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-8 py-5 font-mono font-bold text-xl text-slate-700">
+                                                        {String(item.hour).padStart(2,'0')}:{String(item.minute).padStart(2,'0')}
+                                                    </td>
+                                                    <td className="px-8 py-5 text-slate-500 font-medium">{item.label}</td>
+                                                    <td className="px-8 py-5 text-right">
+                                                        <span className="text-[10px] font-black px-3 py-1 bg-slate-100 text-slate-400 rounded-full uppercase">Programado</span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
+                                <h3 className="font-bold mb-4 flex items-center gap-2">Hardware</h3>
+                                <p className="text-sm text-slate-400 leading-relaxed mb-6">RTC DS3231 compensado por temperatura para máxima precisión.</p>
+                                <div className="space-y-3 font-mono text-[10px]">
+                                    <div className="flex justify-between bg-white/5 p-3 rounded-xl border border-white/5">
+                                        <span className="text-slate-500">I2C Address</span>
+                                        <span className="text-blue-400">0x27</span>
+                                    </div>
+                                    <div className="flex justify-between bg-white/5 p-3 rounded-xl border border-white/5">
+                                        <span className="text-slate-500">Output Pin</span>
+                                        <span className="text-emerald-400">Digital 8</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-8 rounded-[2.5rem] bg-amber-50 border border-amber-100">
+                                <h3 className="font-bold text-amber-900 mb-2 flex items-center gap-2">Calendario</h3>
+                                <p className="text-xs text-amber-700">El sistema ignora fines de semana y festivos cargados en la memoria flash.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+        // Inicializar iconos
+        setTimeout(() => lucide.createIcons(), 500);
+    </script>
+</body>
+</html>
