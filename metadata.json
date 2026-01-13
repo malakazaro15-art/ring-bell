@@ -1,5 +1,0 @@
-{
-  "name": "Copy of Sistema de Timbre Escolar Inteligente",
-  "description": "Una aplicación web que simula y gestiona el sistema de timbre para secundaria basado en Arduino, con visualización de LCD 16x2, calendario de días lectivos y control de horarios.",
-  "requestFramePermissions": []
-}
